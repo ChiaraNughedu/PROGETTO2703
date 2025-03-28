@@ -79,7 +79,9 @@ namespace PROGETTO2703.Controllers
             await _context.SaveChangesAsync();
 
             return CreatedAtAction(nameof(GetArtista), new { id = artista.ArtistaId }, artista);
+
         }
+
 
         // PUT: api/Artisti/5
         [HttpPut("{id}")]

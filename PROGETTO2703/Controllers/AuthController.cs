@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
+using PROGETTO2703.DTO;
 using PROGETTO2703.Models;
 using System;
 using System.IdentityModel.Tokens.Jwt;
@@ -54,56 +55,65 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Registrazione effettuata con successo!" });
     }
 
-    [HttpPost("login")]
-    public async Task<IActionResult> Login(LoginDto model)
+    [HttpPost("Login")]
+    public async Task<IActionResult> Login([FromBody] LoginDto model)
     {
-        var user = await _userManager.FindByEmailAsync(model.Email);
-        if (user == null) return Unauthorized(new { message = "Credenziali non valide." });
-
-        var checkPass = await _signInManager.CheckPasswordSignInAsync(user, model.Password, false);
-        if (!checkPass.Succeeded) return Unauthorized(new { message = "Credenziali non valide." });
-
-        var tokenString = GenerateJwtToken(user);
-        return Ok(new { token = tokenString });
-    }
-
-    private string GenerateJwtToken(ApplicationUser user)
-    {
-        var secretKey = _configuration["Jwt:SecurityKey"];
-        //Console.WriteLine($"SecurityKey from config: {secretKey}");
-
-        if (string.IsNullOrEmpty(secretKey))
+        if (!ModelState.IsValid)
         {
-            throw new ArgumentNullException("Jwt:SecurityKey è NULL! Controlla appsettings.json");
+            return BadRequest(ModelState);
         }
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+        var user = await _userManager.FindByEmailAsync(model.Email);
+        if (user == null)
+        {
+            return Unauthorized("Email o password errati.");
+        }
 
+        bool passwordValida = await _userManager.CheckPasswordAsync(user, model.Password);
+        if (!passwordValida)
+        {
+            return Unauthorized("Email o password errati.");
+        }
 
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var token = GenerateJwtToken(user);
+        return Ok(new { Token = token });
+    }
+    private string GenerateJwtToken(ApplicationUser user)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:SecurityKey"]));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Email, user.Email ?? ""),
-            new Claim("Nome", user.Nome ?? ""),
-            new Claim("Cognome", user.Cognome ?? "")
-        };
-
-        // Aggiunge i ruoli al token
-        var userRoles = _userManager.GetRolesAsync(user).Result;
-        claims.AddRange(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
+    {
+        new Claim(JwtRegisteredClaimNames.Sub, user.Id),
+        new Claim(JwtRegisteredClaimNames.Email, user.Email),
+        new Claim(ClaimTypes.Role, "Amministratore") 
+    };
 
         var token = new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"],
-            audience: _configuration["Jwt:Audience"],
-            claims: claims,
-            expires: DateTime.UtcNow.AddHours(1),
-            signingCredentials: creds
+            _configuration["Jwt:Issuer"],
+            _configuration["Jwt:Audience"],
+            claims,
+            expires: DateTime.UtcNow.AddMinutes(50),
+            signingCredentials: credentials
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    [Authorize(Roles = "Amministratore")]
+    [HttpPost("AssegnaRuolo")]
+    public async Task<IActionResult> AssegnaRuolo([FromBody] AssegnaRuoloDto model)
+    {
+        var user = await _userManager.FindByEmailAsync(model.Email);
+        if (user == null) return NotFound("Utente non trovato.");
+
+        var result = await _userManager.AddToRoleAsync(user, model.Ruolo);
+        if (!result.Succeeded) return BadRequest("Errore nell'assegnazione del ruolo.");
+
+        return Ok($"Ruolo {model.Ruolo} assegnato a {model.Email}");
+    }
+
 
     [HttpPost("createrole")]
     public async Task<IActionResult> CreateRole(string roleName)
@@ -134,4 +144,10 @@ public class LoginDto
 {
     public string Email { get; set; }
     public string Password { get; set; }
+}
+
+public class AssegnaRuoloDto
+{
+    public string Email { get; set; }
+    public string Ruolo { get; set; }
 }

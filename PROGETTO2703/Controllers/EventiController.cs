@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace PROGETTO2703.Controllers
 {
+    [AllowAnonymous]
     [ApiController]
     [Route("api/[controller]")]
     public class EventiController : ControllerBase

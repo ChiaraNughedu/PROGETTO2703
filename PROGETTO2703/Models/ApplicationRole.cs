@@ -1,11 +1,11 @@
 ﻿using Microsoft.AspNetCore.Identity;
-using PROGETTO2703.Models;
+using System.Collections.Generic;
 
 namespace PROGETTO2703.Models
 {
     public class ApplicationRole : IdentityRole
     {
-
-        public ICollection<ApplicationUserRole> ApplicationUsers { get; set; }
+        public string Descrizione { get; set; }
+        public ICollection<ApplicationUserRole> UserRoles { get; set; } = new List<ApplicationUserRole>();
     }
 }
